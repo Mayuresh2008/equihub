@@ -1,0 +1,291 @@
+// EquiHub Prisma Schema
+// Database: AWS RDS PostgreSQL (configured for production)
+// For local development, mock data is used via lib/mock/
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  main_admin
+  startup_admin
+  investor
+}
+
+enum FundingStage {
+  pre_seed
+  seed
+  series_a
+  series_b
+  series_c
+  ipo
+}
+
+enum ShareholderRole {
+  founder
+  co_founder
+  angel
+  vc_investor
+  employee
+  advisor
+}
+
+enum ShareClass {
+  common
+  preferred
+  options
+  safe
+  warrant
+  convertible_note
+}
+
+enum TransactionType {
+  issuance
+  transfer
+  cancellation
+  exercise
+  conversion
+}
+
+enum TransactionStatus {
+  pending
+  completed
+  cancelled
+}
+
+enum OptionStatus {
+  active
+  exercised
+  cancelled
+  expired
+}
+
+enum DocumentStatus {
+  draft
+  pending_signature
+  signed
+  voided
+}
+
+model User {
+  id           String   @id @default(uuid())
+  fullName     String   @map("full_name")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  companyId    String?  @map("company_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  company          Company?            @relation(fields: [companyId], references: [id])
+  shareholders     Shareholder[]
+  generatedDocs    Document[]          @relation("DocGenerator")
+  signedDocs       DocumentSignature[]
+  investments      Investment[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  fromTransactions EquityTransaction[] @relation("FromShareholder")
+  toTransactions   EquityTransaction[] @relation("ToShareholder")
+
+  @@map("users")
+}
+
+model Company {
+  id                    String       @id @default(uuid())
+  companyName           String       @map("company_name")
+  registrationNumber    String?      @map("registration_number")
+  country               String
+  foundedDate           DateTime     @map("founded_date") @db.Date
+  industry              String
+  fundingStage          FundingStage @map("funding_stage")
+  totalAuthorizedShares BigInt       @map("total_authorized_shares")
+  currentValuation      Decimal?     @map("current_valuation") @db.Decimal(18, 2)
+  createdById           String       @map("created_by")
+  createdAt             DateTime     @default(now()) @map("created_at")
+  updatedAt             DateTime     @updatedAt @map("updated_at")
+
+  createdBy     User              @relation(fields: [createdById], references: [id])
+  shareholders  Shareholder[]
+  transactions  EquityTransaction[]
+  fundingRounds FundingRound[]
+  optionGrants  OptionGrant[]
+  documents     Document[]
+  investments   Investment[]
+
+  @@map("companies")
+}
+
+model Shareholder {
+  id           String          @id @default(uuid())
+  companyId    String          @map("company_id")
+  userId       String?         @map("user_id")
+  name         String
+  email        String
+  roleType     ShareholderRole @map("role_type")
+  sharesOwned  BigInt          @map("shares_owned")
+  shareClass   ShareClass      @map("share_class")
+  dateIssued   DateTime        @map("date_issued") @db.Date
+  country      String
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  company     Company            @relation(fields: [companyId], references: [id])
+  user        User?              @relation(fields: [userId], references: [id])
+  fromTxns    EquityTransaction[] @relation("TxFrom")
+  toTxns      EquityTransaction[] @relation("TxTo")
+  optionGrant OptionGrant?
+
+  @@map("shareholders")
+}
+
+// IMMUTABLE LEDGER - append only, never delete or update
+model EquityTransaction {
+  id                  String            @id @default(uuid())
+  companyId           String            @map("company_id")
+  fromShareholderId   String?           @map("from_shareholder_id")
+  toShareholderId     String?           @map("to_shareholder_id")
+  transactionType     TransactionType   @map("transaction_type")
+  numShares           BigInt            @map("num_shares")
+  pricePerShare       Decimal?          @map("price_per_share") @db.Decimal(18, 4)
+  transactionDate     DateTime          @map("transaction_date") @db.Date
+  documentId          String?           @map("document_id")
+  status              TransactionStatus @default(completed)
+  notes               String?
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  company         Company      @relation(fields: [companyId], references: [id])
+  fromShareholder Shareholder? @relation("TxFrom", fields: [fromShareholderId], references: [id])
+  toShareholder   Shareholder? @relation("TxTo", fields: [toShareholderId], references: [id])
+  fromUser        User?        @relation("FromShareholder", fields: [fromShareholderId], references: [id])
+  toUser          User?        @relation("ToShareholder", fields: [toShareholderId], references: [id])
+
+  @@map("equity_transactions")
+}
+
+model FundingRound {
+  id                   String       @id @default(uuid())
+  companyId            String       @map("company_id")
+  roundName            String       @map("round_name")
+  amountRaised         Decimal      @map("amount_raised") @db.Decimal(18, 2)
+  currency             String       @default("USD")
+  roundDate            DateTime     @map("round_date") @db.Date
+  leadInvestor         String?      @map("lead_investor")
+  preMoneyValuation    Decimal      @map("pre_money_valuation") @db.Decimal(18, 2)
+  postMoneyValuation   Decimal      @map("post_money_valuation") @db.Decimal(18, 2)
+  pricePerShare        Decimal      @map("price_per_share") @db.Decimal(18, 4)
+  newSharesIssued      BigInt       @map("new_shares_issued")
+  createdAt            DateTime     @default(now()) @map("created_at")
+
+  company      Company       @relation(fields: [companyId], references: [id])
+  investments  Investment[]
+
+  @@map("funding_rounds")
+}
+
+model OptionGrant {
+  id                  String       @id @default(uuid())
+  companyId           String       @map("company_id")
+  employeeId          String       @map("employee_id")
+  numOptions          BigInt       @map("num_options")
+  exercisePrice       Decimal      @map("exercise_price") @db.Decimal(18, 4)
+  grantDate           DateTime     @map("grant_date") @db.Date
+  vestingStartDate    DateTime     @map("vesting_start_date") @db.Date
+  cliffMonths         Int          @map("cliff_months")
+  vestingPeriodMonths Int          @map("vesting_period_months")
+  status              OptionStatus @default(active)
+  createdAt           DateTime     @default(now()) @map("created_at")
+
+  company  Company    @relation(fields: [companyId], references: [id])
+  employee Shareholder @relation(fields: [employeeId], references: [id])
+
+  @@map("option_grants")
+}
+
+model Investment {
+  id                  String   @id @default(uuid())
+  investorUserId      String   @map("investor_user_id")
+  companyId           String   @map("company_id")
+  fundingRoundId      String   @map("funding_round_id")
+  amountInvested      Decimal  @map("amount_invested") @db.Decimal(18, 2)
+  currency            String   @default("USD")
+  sharesReceived      BigInt   @map("shares_received")
+  shareClass          String   @map("share_class")
+  investmentDate      DateTime @map("investment_date") @db.Date
+  currentValue        Decimal? @map("current_value") @db.Decimal(18, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  investor     User         @relation(fields: [investorUserId], references: [id])
+  company      Company      @relation(fields: [companyId], references: [id])
+  fundingRound FundingRound @relation(fields: [fundingRoundId], references: [id])
+
+  @@map("investments")
+}
+
+model Document {
+  id           String         @id @default(uuid())
+  companyId    String         @map("company_id")
+  documentType String         @map("document_type")
+  documentName String         @map("document_name")
+  fileUrl      String?        @map("file_url") @db.Text
+  content      String?        @db.Text
+  generatedById String        @map("generated_by")
+  status       DocumentStatus @default(draft)
+  signatories  Json?
+  signedAt     DateTime?      @map("signed_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  company     Company              @relation(fields: [companyId], references: [id])
+  generatedBy User                @relation("DocGenerator", fields: [generatedById], references: [id])
+  signatures  DocumentSignature[]
+
+  @@map("documents")
+}
+
+model DocumentSignature {
+  id         String   @id @default(uuid())
+  documentId String   @map("document_id")
+  userId     String   @map("user_id")
+  signedAt   DateTime @default(now()) @map("signed_at")
+  ipAddress  String?  @map("ip_address")
+
+  document Document @relation(fields: [documentId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([documentId, userId])
+  @@map("document_signatures")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id")
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  oldValue     Json?    @map("old_value")
+  newValue     Json?    @map("new_value")
+  ipAddress    String?  @map("ip_address")
+  timestamp    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String
+  message   String   @db.Text
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}

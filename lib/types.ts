@@ -6,6 +6,7 @@ export type ShareholderRole = 'founder' | 'co_founder' | 'angel' | 'vc_investor'
 export type ShareClass = 'common' | 'preferred' | 'options' | 'safe' | 'warrant' | 'convertible_note'
 export type DocumentStatus = 'draft' | 'pending_signature' | 'signed' | 'voided'
 export type OptionStatus = 'active' | 'exercised' | 'cancelled' | 'expired'
+export type DocumentType = 'sha' | 'safe' | 'term_sheet' | 'option_grant' | 'board_resolution' | 'employment_agreement' | 'nda' | 'other'
 
 export interface User {
   id: string
@@ -107,7 +108,7 @@ export interface Investment {
 export interface Document {
   id: string
   companyId: string
-  documentType: string
+  documentType: DocumentType
   documentName: string
   fileUrl?: string
   content?: string

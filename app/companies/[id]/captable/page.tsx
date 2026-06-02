@@ -16,7 +16,7 @@ import { DilutionHistory } from '@/components/captable/DilutionHistory'
 import { AddShareholderModal } from '@/components/captable/AddShareholderModal'
 import { EditShareholderModal } from '@/components/captable/EditShareholderModal'
 import { TransferSharesModal } from '@/components/captable/TransferSharesModal'
-import { DilutionCalculator } from '@/components/captable/DilutionCalculator'
+import { WhatIfSimulator } from '@/components/captable/WhatIfSimulator'
 import type { ShareholderView, CapTableSummary, Company, FundingRound, ShareholderRole } from '@/lib/types'
 import { formatNumber } from '@/lib/utils'
 import { ExportButton } from '@/components/shared/ExportButton'
@@ -155,7 +155,7 @@ export default function CapTablePage() {
           {[
             { id: 'shareholders', label: 'Shareholders', count: shareholders.length },
             { id: 'type-breakdown', label: 'By Type', icon: Users },
-            { id: 'calculator', label: 'What-If Calculator', icon: Calculator },
+            { id: 'calculator', label: '🔮 What If Simulator', icon: Calculator },
             { id: 'history', label: 'Dilution History' },
           ].map(t => (
             <button
@@ -214,11 +214,11 @@ export default function CapTablePage() {
         )}
 
         {tab === 'calculator' && summary && (
-          <DilutionCalculator
+          <WhatIfSimulator
             companyId={company.id}
+            companyName={company.companyName}
             shareholders={shareholders}
             authorized={company.totalAuthorizedShares}
-            currentValuation={summary.currentValuation}
           />
         )}
 

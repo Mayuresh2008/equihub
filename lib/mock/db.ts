@@ -3,7 +3,8 @@
 
 import type {
   User, Company, Shareholder, EquityTransaction, FundingRound,
-  OptionGrant, Investment, Document, AuditLog, Notification
+  OptionGrant, Investment, Document, AuditLog, Notification, ShareTransfer,
+  ShareholderRights, VestingSchedule,
 } from '../types'
 
 // Use a single global object so it persists across HMR
@@ -14,6 +15,13 @@ if (!g.__EQUIHUB_DB__) {
 }
 
 export const db = g.__EQUIHUB_DB__
+
+function defaultRights(over: Partial<ShareholderRights> = {}): ShareholderRights {
+  return { boardSeat: false, votingRights: true, proRataRights: false, antiDilution: false, liquidationPreference: 1, ...over }
+}
+function defaultVesting(enabled = false): VestingSchedule {
+  return { enabled, cliffMonths: 12, totalMonths: 48, type: 'monthly', acceleration: false, startDate: '' }
+}
 
 function createSeedData() {
   const now = new Date().toISOString()
@@ -40,35 +48,35 @@ function createSeedData() {
     { id: 'c5', companyName: 'MediSync Labs', registrationNumber: 'MS-2022-091', country: 'United Kingdom', foundedDate: '2021-11-05', industry: 'HealthTech', fundingStage: 'series_a', totalAuthorizedShares: 9000000, currentValuation: 32000000, createdById: 'u1', createdAt: now },
   ]
 
-  // SHAREHOLDERS
+  // SHAREHOLDERS — extended with rights, vesting, status, certificate numbers
   const shareholders: Shareholder[] = [
     // NeuralPath AI
-    { id: 's1', companyId: 'c1', name: 'Alex Patel', email: 'alex@neuralpath.io', roleType: 'founder', sharesOwned: 3500000, shareClass: 'common', dateIssued: '2023-01-15', country: 'United States', createdAt: now },
-    { id: 's2', companyId: 'c1', name: 'Priya Singh', email: 'priya@neuralpath.io', roleType: 'co_founder', sharesOwned: 2000000, shareClass: 'common', dateIssued: '2023-01-15', country: 'United States', createdAt: now },
-    { id: 's3', companyId: 'c1', name: 'Accel Ventures', email: 'deals@accel.vc', roleType: 'vc_investor', sharesOwned: 1500000, shareClass: 'preferred', dateIssued: '2024-03-20', country: 'United States', createdAt: now },
-    { id: 's4', companyId: 'c1', name: 'ESOP Pool', email: 'esop@neuralpath.io', roleType: 'employee', sharesOwned: 1000000, shareClass: 'options', dateIssued: '2023-01-15', country: 'United States', createdAt: now },
-    { id: 's5', companyId: 'c1', name: 'John Angel', email: 'john@angel.com', roleType: 'angel', sharesOwned: 200000, shareClass: 'safe', dateIssued: '2023-06-10', country: 'United States', createdAt: now },
+    { id: 's1', companyId: 'c1', name: 'Alex Patel', email: 'alex@neuralpath.io', phone: '+1 555-0101', country: 'United States', roleType: 'founder', sharesOwned: 3500000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 3500, dateIssued: '2023-01-15', certificateNumber: 'SC-0001', status: 'active', rights: defaultRights({ boardSeat: true, proRataRights: true }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's2', companyId: 'c1', name: 'Priya Singh', email: 'priya@neuralpath.io', phone: '+1 555-0102', country: 'United States', roleType: 'co_founder', sharesOwned: 2000000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 2000, dateIssued: '2023-01-15', certificateNumber: 'SC-0002', status: 'active', rights: defaultRights({ boardSeat: false, proRataRights: true }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's3', companyId: 'c1', name: 'Accel Ventures', email: 'deals@accel.vc', country: 'United States', roleType: 'vc_investor', sharesOwned: 1500000, shareClass: 'preferred_a', pricePerShare: 3.33, investmentAmount: 4995000, dateIssued: '2024-03-20', certificateNumber: 'SC-0003', status: 'active', rights: defaultRights({ boardSeat: true, proRataRights: true, antiDilution: true, liquidationPreference: 1 }), vesting: defaultVesting(false), createdAt: now, notes: 'Lead Series A investor' },
+    { id: 's4', companyId: 'c1', name: 'ESOP Pool', email: 'esop@neuralpath.io', country: 'United States', roleType: 'employee', sharesOwned: 1000000, shareClass: 'options', pricePerShare: 1.00, investmentAmount: 0, dateIssued: '2023-01-15', certificateNumber: 'SC-0004', status: 'active', rights: defaultRights({ votingRights: false }), vesting: defaultVesting(false), createdAt: now, notes: 'Employee stock option pool' },
+    { id: 's5', companyId: 'c1', name: 'John Angel', email: 'john@angel.com', country: 'United States', roleType: 'angel', sharesOwned: 200000, shareClass: 'safe', pricePerShare: 2.50, investmentAmount: 500000, dateIssued: '2023-06-10', certificateNumber: 'SC-0005', status: 'active', rights: defaultRights(), vesting: defaultVesting(false), createdAt: now, notes: 'Converted from SAFE' },
     // GreenGrid
-    { id: 's6', companyId: 'c2', name: 'Maria Rodriguez', email: 'maria@greengrid.com', roleType: 'founder', sharesOwned: 3000000, shareClass: 'common', dateIssued: '2022-06-20', country: 'Germany', createdAt: now },
-    { id: 's7', companyId: 'c2', name: 'Klaus Mueller', email: 'klaus@greengrid.com', roleType: 'co_founder', sharesOwned: 1500000, shareClass: 'common', dateIssued: '2022-06-20', country: 'Germany', createdAt: now },
-    { id: 's8', companyId: 'c2', name: 'Climate Capital', email: 'invest@climate.vc', roleType: 'vc_investor', sharesOwned: 800000, shareClass: 'preferred', dateIssued: '2023-09-15', country: 'United Kingdom', createdAt: now },
-    { id: 's9', companyId: 'c2', name: 'ESOP Pool', email: 'esop@greengrid.com', roleType: 'employee', sharesOwned: 500000, shareClass: 'options', dateIssued: '2022-06-20', country: 'Germany', createdAt: now },
+    { id: 's6', companyId: 'c2', name: 'Maria Rodriguez', email: 'maria@greengrid.com', country: 'Germany', roleType: 'founder', sharesOwned: 3000000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 3000, dateIssued: '2022-06-20', certificateNumber: 'SC-0006', status: 'active', rights: defaultRights({ boardSeat: true }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's7', companyId: 'c2', name: 'Klaus Mueller', email: 'klaus@greengrid.com', country: 'Germany', roleType: 'co_founder', sharesOwned: 1500000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 1500, dateIssued: '2022-06-20', certificateNumber: 'SC-0007', status: 'active', rights: defaultRights(), vesting: defaultVesting(false), createdAt: now },
+    { id: 's8', companyId: 'c2', name: 'Climate Capital', email: 'invest@climate.vc', country: 'United Kingdom', roleType: 'vc_investor', sharesOwned: 800000, shareClass: 'preferred_seed', pricePerShare: 1.50, investmentAmount: 1200000, dateIssued: '2023-09-15', certificateNumber: 'SC-0008', status: 'active', rights: defaultRights({ boardSeat: true, proRataRights: true, antiDilution: true, liquidationPreference: 1 }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's9', companyId: 'c2', name: 'ESOP Pool', email: 'esop@greengrid.com', country: 'Germany', roleType: 'employee', sharesOwned: 500000, shareClass: 'options', pricePerShare: 0.75, investmentAmount: 0, dateIssued: '2022-06-20', certificateNumber: 'SC-0009', status: 'active', rights: defaultRights({ votingRights: false }), vesting: defaultVesting(false), createdAt: now },
     // PayFlow
-    { id: 's10', companyId: 'c3', name: 'James Park', email: 'james@payflow.com', roleType: 'founder', sharesOwned: 2500000, shareClass: 'common', dateIssued: '2021-03-10', country: 'United States', createdAt: now },
-    { id: 's11', companyId: 'c3', name: 'Aisha Khan', email: 'aisha@payflow.com', roleType: 'co_founder', sharesOwned: 1500000, shareClass: 'common', dateIssued: '2021-03-10', country: 'United States', createdAt: now },
-    { id: 's12', companyId: 'c3', name: 'Sequoia Capital', email: 'deals@sequoia.vc', roleType: 'vc_investor', sharesOwned: 2000000, shareClass: 'preferred', dateIssued: '2022-08-12', country: 'United States', createdAt: now },
-    { id: 's13', companyId: 'c3', name: 'Andreessen Horowitz', email: 'deals@a16z.com', roleType: 'vc_investor', sharesOwned: 1500000, shareClass: 'preferred', dateIssued: '2024-02-20', country: 'United States', createdAt: now },
-    { id: 's14', companyId: 'c3', name: 'ESOP Pool', email: 'esop@payflow.com', roleType: 'employee', sharesOwned: 1800000, shareClass: 'options', dateIssued: '2021-03-10', country: 'United States', createdAt: now },
+    { id: 's10', companyId: 'c3', name: 'James Park', email: 'james@payflow.com', country: 'United States', roleType: 'founder', sharesOwned: 2500000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 2500, dateIssued: '2021-03-10', certificateNumber: 'SC-0010', status: 'active', rights: defaultRights({ boardSeat: true }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's11', companyId: 'c3', name: 'Aisha Khan', email: 'aisha@payflow.com', country: 'United States', roleType: 'co_founder', sharesOwned: 1500000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 1500, dateIssued: '2021-03-10', certificateNumber: 'SC-0011', status: 'active', rights: defaultRights(), vesting: defaultVesting(false), createdAt: now },
+    { id: 's12', companyId: 'c3', name: 'Sequoia Capital', email: 'deals@sequoia.vc', country: 'United States', roleType: 'vc_investor', sharesOwned: 2000000, shareClass: 'preferred_a', pricePerShare: 5.00, investmentAmount: 10000000, dateIssued: '2022-08-12', certificateNumber: 'SC-0012', status: 'active', rights: defaultRights({ boardSeat: true, proRataRights: true, antiDilution: true, liquidationPreference: 1 }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's13', companyId: 'c3', name: 'Andreessen Horowitz', email: 'deals@a16z.com', country: 'United States', roleType: 'vc_investor', sharesOwned: 1500000, shareClass: 'preferred_b', pricePerShare: 8.00, investmentAmount: 12000000, dateIssued: '2024-02-20', certificateNumber: 'SC-0013', status: 'active', rights: defaultRights({ boardSeat: true, proRataRights: true, antiDilution: true, liquidationPreference: 1 }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's14', companyId: 'c3', name: 'ESOP Pool', email: 'esop@payflow.com', country: 'United States', roleType: 'employee', sharesOwned: 1800000, shareClass: 'options', pricePerShare: 3.00, investmentAmount: 0, dateIssued: '2021-03-10', certificateNumber: 'SC-0014', status: 'active', rights: defaultRights({ votingRights: false }), vesting: defaultVesting(false), createdAt: now },
     // BlockVault
-    { id: 's15', companyId: 'c4', name: 'Lisa Wang', email: 'lisa@blockvault.com', roleType: 'founder', sharesOwned: 4000000, shareClass: 'common', dateIssued: '2023-09-01', country: 'Singapore', createdAt: now },
-    { id: 's16', companyId: 'c4', name: 'ESOP Pool', email: 'esop@blockvault.com', roleType: 'employee', sharesOwned: 800000, shareClass: 'options', dateIssued: '2023-09-01', country: 'Singapore', createdAt: now },
-    { id: 's17', companyId: 'c4', name: 'Cyber Angels', email: 'invest@cyberangels.vc', roleType: 'angel', sharesOwned: 300000, shareClass: 'safe', dateIssued: '2024-01-15', country: 'United States', createdAt: now },
+    { id: 's15', companyId: 'c4', name: 'Lisa Wang', email: 'lisa@blockvault.com', country: 'Singapore', roleType: 'founder', sharesOwned: 4000000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 4000, dateIssued: '2023-09-01', certificateNumber: 'SC-0015', status: 'active', rights: defaultRights({ boardSeat: true }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's16', companyId: 'c4', name: 'ESOP Pool', email: 'esop@blockvault.com', country: 'Singapore', roleType: 'employee', sharesOwned: 800000, shareClass: 'options', pricePerShare: 0.40, investmentAmount: 0, dateIssued: '2023-09-01', certificateNumber: 'SC-0016', status: 'active', rights: defaultRights({ votingRights: false }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's17', companyId: 'c4', name: 'Cyber Angels', email: 'invest@cyberangels.vc', country: 'United States', roleType: 'angel', sharesOwned: 300000, shareClass: 'safe', pricePerShare: 1.33, investmentAmount: 400000, dateIssued: '2024-01-15', certificateNumber: 'SC-0017', status: 'active', rights: defaultRights(), vesting: defaultVesting(false), createdAt: now },
     // MediSync
-    { id: 's18', companyId: 'c5', name: 'Dr. Mike Johnson', email: 'mike@medisync.com', roleType: 'founder', sharesOwned: 2800000, shareClass: 'common', dateIssued: '2021-11-05', country: 'United Kingdom', createdAt: now },
-    { id: 's19', companyId: 'c5', name: 'Dr. Sarah Lee', email: 'sarah@medisync.com', roleType: 'co_founder', sharesOwned: 1600000, shareClass: 'common', dateIssued: '2021-11-05', country: 'United Kingdom', createdAt: now },
-    { id: 's20', companyId: 'c5', name: 'Y Combinator', email: 'deals@ycombinator.com', roleType: 'vc_investor', sharesOwned: 1200000, shareClass: 'preferred', dateIssued: '2022-04-10', country: 'United States', createdAt: now },
-    { id: 's21', companyId: 'c5', name: 'Index Ventures', email: 'deals@index.vc', roleType: 'vc_investor', sharesOwned: 800000, shareClass: 'preferred', dateIssued: '2024-01-25', country: 'United Kingdom', createdAt: now },
-    { id: 's22', companyId: 'c5', name: 'ESOP Pool', email: 'esop@medisync.com', roleType: 'employee', sharesOwned: 900000, shareClass: 'options', dateIssued: '2021-11-05', country: 'United Kingdom', createdAt: now },
+    { id: 's18', companyId: 'c5', name: 'Dr. Mike Johnson', email: 'mike@medisync.com', country: 'United Kingdom', roleType: 'founder', sharesOwned: 2800000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 2800, dateIssued: '2021-11-05', certificateNumber: 'SC-0018', status: 'active', rights: defaultRights({ boardSeat: true }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's19', companyId: 'c5', name: 'Dr. Sarah Lee', email: 'sarah@medisync.com', country: 'United Kingdom', roleType: 'co_founder', sharesOwned: 1600000, shareClass: 'common', pricePerShare: 0.001, investmentAmount: 1600, dateIssued: '2021-11-05', certificateNumber: 'SC-0019', status: 'active', rights: defaultRights(), vesting: defaultVesting(false), createdAt: now },
+    { id: 's20', companyId: 'c5', name: 'Y Combinator', email: 'deals@ycombinator.com', country: 'United States', roleType: 'vc_investor', sharesOwned: 1200000, shareClass: 'preferred_seed', pricePerShare: 2.00, investmentAmount: 2400000, dateIssued: '2022-04-10', certificateNumber: 'SC-0020', status: 'active', rights: defaultRights({ boardSeat: true, proRataRights: true, antiDilution: true, liquidationPreference: 1 }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's21', companyId: 'c5', name: 'Index Ventures', email: 'deals@index.vc', country: 'United Kingdom', roleType: 'vc_investor', sharesOwned: 800000, shareClass: 'preferred_a', pricePerShare: 4.00, investmentAmount: 3200000, dateIssued: '2024-01-25', certificateNumber: 'SC-0021', status: 'active', rights: defaultRights({ boardSeat: true, proRataRights: true, antiDilution: true, liquidationPreference: 1 }), vesting: defaultVesting(false), createdAt: now },
+    { id: 's22', companyId: 'c5', name: 'ESOP Pool', email: 'esop@medisync.com', country: 'United Kingdom', roleType: 'employee', sharesOwned: 900000, shareClass: 'options', pricePerShare: 1.50, investmentAmount: 0, dateIssued: '2021-11-05', certificateNumber: 'SC-0022', status: 'active', rights: defaultRights({ votingRights: false }), vesting: defaultVesting(false), createdAt: now },
   ]
 
   // EQUITY TRANSACTIONS (immutable ledger)
@@ -80,6 +88,11 @@ function createSeedData() {
     { id: 't5', companyId: 'c1', toShareholderId: 's3', transactionType: 'issuance', numShares: 1500000, pricePerShare: 3.33, transactionDate: '2024-03-20', status: 'completed', createdAt: now, notes: 'Series A investment' },
     { id: 't6', companyId: 'c3', toShareholderId: 's12', transactionType: 'issuance', numShares: 2000000, pricePerShare: 5.00, transactionDate: '2022-08-12', status: 'completed', createdAt: now, notes: 'Series A investment' },
     { id: 't7', companyId: 'c3', toShareholderId: 's13', transactionType: 'issuance', numShares: 1500000, pricePerShare: 8.00, transactionDate: '2024-02-20', status: 'completed', createdAt: now, notes: 'Series B investment' },
+  ]
+
+  // SHARE TRANSFERS (seed: a small historical example)
+  const shareTransfers: ShareTransfer[] = [
+    { id: 'tr1', companyId: 'c1', fromShareholderId: 's1', toShareholderId: 's5', numShares: 50000, pricePerShare: 0.001, transferDate: '2023-08-15', reason: 'Internal reallocation', createdById: 'u2', createdAt: now },
   ]
 
   // FUNDING ROUNDS
@@ -134,6 +147,7 @@ function createSeedData() {
     { id: 'al6', userId: 'u1', action: 'ai.document.generated', resourceType: 'Document', resourceId: 'd3', newValue: { type: 'Term Sheet', model: 'claude-3-sonnet' }, timestamp: now },
     { id: 'al7', userId: 'u7', action: 'portfolio.viewed', resourceType: 'Company', resourceId: 'c3', timestamp: now },
     { id: 'al8', userId: 'u1', action: 'document.signed', resourceType: 'Document', resourceId: 'd5', timestamp: now },
+    { id: 'al9', userId: 'u2', action: 'shareholder.transferred', resourceType: 'ShareTransfer', resourceId: 'tr1', newValue: { from: 's1', to: 's5', numShares: 50000 }, timestamp: now },
   ]
 
   // NOTIFICATIONS
@@ -148,6 +162,7 @@ function createSeedData() {
 
   return {
     users, companies, shareholders, equityTransactions, fundingRounds,
-    optionGrants, investments, documents, auditLogs, notifications
+    optionGrants, investments, documents, auditLogs, notifications,
+    shareTransfers,
   }
 }

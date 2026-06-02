@@ -83,15 +83,14 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  company          Company?            @relation(fields: [companyId], references: [id])
-  shareholders     Shareholder[]
-  generatedDocs    Document[]          @relation("DocGenerator")
-  signedDocs       DocumentSignature[]
-  investments      Investment[]
-  auditLogs        AuditLog[]
-  notifications    Notification[]
-  fromTransactions EquityTransaction[] @relation("FromShareholder")
-  toTransactions   EquityTransaction[] @relation("ToShareholder")
+  company        Company?            @relation("UserCompany", fields: [companyId], references: [id])
+  createdCompanies Company[]         @relation("CompanyCreator")
+  shareholders   Shareholder[]
+  generatedDocs  Document[]          @relation("DocGenerator")
+  signatures     DocumentSignature[]
+  investments    Investment[]
+  auditLogs      AuditLog[]
+  notifications  Notification[]
 
   @@map("users")
 }
@@ -110,7 +109,8 @@ model Company {
   createdAt             DateTime     @default(now()) @map("created_at")
   updatedAt             DateTime     @updatedAt @map("updated_at")
 
-  createdBy     User              @relation(fields: [createdById], references: [id])
+  createdBy     User               @relation("CompanyCreator", fields: [createdById], references: [id])
+  users         User[]             @relation("UserCompany")
   shareholders  Shareholder[]
   transactions  EquityTransaction[]
   fundingRounds FundingRound[]
@@ -134,55 +134,53 @@ model Shareholder {
   country      String
   createdAt    DateTime        @default(now()) @map("created_at")
 
-  company     Company            @relation(fields: [companyId], references: [id])
-  user        User?              @relation(fields: [userId], references: [id])
-  fromTxns    EquityTransaction[] @relation("TxFrom")
-  toTxns      EquityTransaction[] @relation("TxTo")
-  optionGrant OptionGrant?
+  company      Company             @relation(fields: [companyId], references: [id])
+  user         User?               @relation(fields: [userId], references: [id])
+  fromTxns     EquityTransaction[] @relation("TxFrom")
+  toTxns       EquityTransaction[] @relation("TxTo")
+  optionGrants OptionGrant[]
 
   @@map("shareholders")
 }
 
 // IMMUTABLE LEDGER - append only, never delete or update
 model EquityTransaction {
-  id                  String            @id @default(uuid())
-  companyId           String            @map("company_id")
-  fromShareholderId   String?           @map("from_shareholder_id")
-  toShareholderId     String?           @map("to_shareholder_id")
-  transactionType     TransactionType   @map("transaction_type")
-  numShares           BigInt            @map("num_shares")
-  pricePerShare       Decimal?          @map("price_per_share") @db.Decimal(18, 4)
-  transactionDate     DateTime          @map("transaction_date") @db.Date
-  documentId          String?           @map("document_id")
-  status              TransactionStatus @default(completed)
-  notes               String?
-  createdAt           DateTime          @default(now()) @map("created_at")
+  id                String            @id @default(uuid())
+  companyId         String            @map("company_id")
+  fromShareholderId String?           @map("from_shareholder_id")
+  toShareholderId   String?           @map("to_shareholder_id")
+  transactionType   TransactionType   @map("transaction_type")
+  numShares         BigInt            @map("num_shares")
+  pricePerShare     Decimal?          @map("price_per_share") @db.Decimal(18, 4)
+  transactionDate   DateTime          @map("transaction_date") @db.Date
+  documentId        String?           @map("document_id")
+  status            TransactionStatus @default(completed)
+  notes             String?
+  createdAt         DateTime          @default(now()) @map("created_at")
 
   company         Company      @relation(fields: [companyId], references: [id])
   fromShareholder Shareholder? @relation("TxFrom", fields: [fromShareholderId], references: [id])
   toShareholder   Shareholder? @relation("TxTo", fields: [toShareholderId], references: [id])
-  fromUser        User?        @relation("FromShareholder", fields: [fromShareholderId], references: [id])
-  toUser          User?        @relation("ToShareholder", fields: [toShareholderId], references: [id])
 
   @@map("equity_transactions")
 }
 
 model FundingRound {
-  id                   String       @id @default(uuid())
-  companyId            String       @map("company_id")
-  roundName            String       @map("round_name")
-  amountRaised         Decimal      @map("amount_raised") @db.Decimal(18, 2)
-  currency             String       @default("USD")
-  roundDate            DateTime     @map("round_date") @db.Date
-  leadInvestor         String?      @map("lead_investor")
-  preMoneyValuation    Decimal      @map("pre_money_valuation") @db.Decimal(18, 2)
-  postMoneyValuation   Decimal      @map("post_money_valuation") @db.Decimal(18, 2)
-  pricePerShare        Decimal      @map("price_per_share") @db.Decimal(18, 4)
-  newSharesIssued      BigInt       @map("new_shares_issued")
-  createdAt            DateTime     @default(now()) @map("created_at")
+  id                 String   @id @default(uuid())
+  companyId          String   @map("company_id")
+  roundName          String   @map("round_name")
+  amountRaised       Decimal  @map("amount_raised") @db.Decimal(18, 2)
+  currency           String   @default("USD")
+  roundDate          DateTime @map("round_date") @db.Date
+  leadInvestor       String?  @map("lead_investor")
+  preMoneyValuation  Decimal  @map("pre_money_valuation") @db.Decimal(18, 2)
+  postMoneyValuation Decimal  @map("post_money_valuation") @db.Decimal(18, 2)
+  pricePerShare      Decimal  @map("price_per_share") @db.Decimal(18, 4)
+  newSharesIssued    BigInt   @map("new_shares_issued")
+  createdAt          DateTime @default(now()) @map("created_at")
 
-  company      Company       @relation(fields: [companyId], references: [id])
-  investments  Investment[]
+  company     Company      @relation(fields: [companyId], references: [id])
+  investments Investment[]
 
   @@map("funding_rounds")
 }
@@ -200,24 +198,24 @@ model OptionGrant {
   status              OptionStatus @default(active)
   createdAt           DateTime     @default(now()) @map("created_at")
 
-  company  Company    @relation(fields: [companyId], references: [id])
+  company  Company     @relation(fields: [companyId], references: [id])
   employee Shareholder @relation(fields: [employeeId], references: [id])
 
   @@map("option_grants")
 }
 
 model Investment {
-  id                  String   @id @default(uuid())
-  investorUserId      String   @map("investor_user_id")
-  companyId           String   @map("company_id")
-  fundingRoundId      String   @map("funding_round_id")
-  amountInvested      Decimal  @map("amount_invested") @db.Decimal(18, 2)
-  currency            String   @default("USD")
-  sharesReceived      BigInt   @map("shares_received")
-  shareClass          String   @map("share_class")
-  investmentDate      DateTime @map("investment_date") @db.Date
-  currentValue        Decimal? @map("current_value") @db.Decimal(18, 2)
-  createdAt           DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  investorUserId String   @map("investor_user_id")
+  companyId      String   @map("company_id")
+  fundingRoundId String   @map("funding_round_id")
+  amountInvested Decimal  @map("amount_invested") @db.Decimal(18, 2)
+  currency       String   @default("USD")
+  sharesReceived BigInt   @map("shares_received")
+  shareClass     String   @map("share_class")
+  investmentDate DateTime @map("investment_date") @db.Date
+  currentValue   Decimal? @map("current_value") @db.Decimal(18, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
 
   investor     User         @relation(fields: [investorUserId], references: [id])
   company      Company      @relation(fields: [companyId], references: [id])
@@ -227,21 +225,21 @@ model Investment {
 }
 
 model Document {
-  id           String         @id @default(uuid())
-  companyId    String         @map("company_id")
-  documentType String         @map("document_type")
-  documentName String         @map("document_name")
-  fileUrl      String?        @map("file_url") @db.Text
-  content      String?        @db.Text
-  generatedById String        @map("generated_by")
-  status       DocumentStatus @default(draft)
-  signatories  Json?
-  signedAt     DateTime?      @map("signed_at")
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
+  id            String         @id @default(uuid())
+  companyId     String         @map("company_id")
+  documentType  String         @map("document_type")
+  documentName  String         @map("document_name")
+  fileUrl       String?        @map("file_url") @db.Text
+  content       String?        @db.Text
+  generatedById String         @map("generated_by")
+  status        DocumentStatus @default(draft)
+  signatories   Json?
+  signedAt      DateTime?      @map("signed_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
 
   company     Company              @relation(fields: [companyId], references: [id])
-  generatedBy User                @relation("DocGenerator", fields: [generatedById], references: [id])
+  generatedBy User                 @relation("DocGenerator", fields: [generatedById], references: [id])
   signatures  DocumentSignature[]
 
   @@map("documents")

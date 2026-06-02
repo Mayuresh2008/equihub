@@ -1,9 +1,13 @@
-// Mock JWT authentication
-// In production, this would use AWS Cognito + JWT signed tokens
-// For the prototype, we encode user info in a simple base64 token stored in localStorage
+// Authentication for EquiHub
+// - In production: AWS Cognito User Pool with 3 groups (main_admin, startup_admin, investor)
+// - In dev/mock: base64 token with the same shape, stored in localStorage
+//
+// To switch to real Cognito, set COGNITO_USER_POOL_ID + COGNITO_CLIENT_ID
+// and update the login API route to call cognitoSignIn() instead of the mock branch.
 
 import type { User, Role } from './types'
 import { db } from './mock/db'
+import { cognito } from './aws'
 
 export interface AuthToken {
   user_id: string
@@ -57,6 +61,26 @@ export function login(email: string, role: Role): { user: User; token: string } 
   if (!user) return { error: 'Invalid credentials. Please check your email and role.' }
   const token = signToken(user)
   return { user, token }
+}
+
+/** Production login. Tries Cognito first if configured, falls back to mock. */
+export async function productionLogin(email: string, password: string): Promise<{ user: User; token: string; idToken: string; refreshToken: string } | { error: string }> {
+  if (process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID) {
+    try {
+      const auth = await cognito.cognitoSignIn(email, password)
+      const { user, role } = await cognito.cognitoGetUser(auth.accessToken)
+      if (role !== 'main_admin' && role !== 'startup_admin' && role !== 'investor') {
+        return { error: 'Role not assigned in Cognito groups' }
+      }
+      return { user, token: auth.accessToken, idToken: auth.idToken, refreshToken: auth.refreshToken }
+    } catch (e: any) {
+      return { error: e.message || 'Cognito login failed' }
+    }
+  }
+  // Fallback: mock auth (no password check)
+  const user = db.users.find(u => u.email === email && u.isActive)
+  if (!user) return { error: 'Invalid credentials' }
+  return { user, token: signToken(user), idToken: signToken(user), refreshToken: '' }
 }
 
 export function setSession(user: User, token: string) {

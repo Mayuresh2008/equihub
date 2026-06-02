@@ -12,10 +12,13 @@ import { ESOPTracker } from '@/components/captable/ESOPTracker'
 import { DilutionHistory } from '@/components/captable/DilutionHistory'
 import { StatCard } from '@/components/shared/StatCard'
 import { ExportButton } from '@/components/shared/ExportButton'
+import { ModalShell, Field } from '@/components/shared/Modal'
 import { Plus, FileText, Download } from 'lucide-react'
 import Link from 'next/link'
 import { totalIssuedShares, calculateOwnership } from '@/lib/utils/calculations'
 import { formatCurrency, formatNumber } from '@/lib/utils'
+import { api } from '@/lib/api-client'
+import { toast } from '@/lib/store/toast'
 
 export default function CapTablePage() {
   const { user } = useAuthStore()
@@ -107,7 +110,11 @@ export default function CapTablePage() {
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Funding Rounds</h2>
-              {user.role === 'startup_admin' && <button className="btn btn-primary btn-sm"><Plus className="w-3.5 h-3.5" /> Add Round</button>}
+              {user.role === 'startup_admin' && (
+                <Link href={`/companies/${company.id}/funding-rounds`} className="btn btn-primary btn-sm">
+                  <Plus className="w-3.5 h-3.5" /> Manage Rounds
+                </Link>
+              )}
             </div>
             <FundingRoundsTable rounds={rounds} />
           </div>
@@ -117,7 +124,11 @@ export default function CapTablePage() {
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">ESOP / Option Grants</h2>
-              {user.role === 'startup_admin' && <button className="btn btn-primary btn-sm"><Plus className="w-3.5 h-3.5" /> Add Grant</button>}
+              {user.role === 'startup_admin' && (
+                <Link href={`/companies/${company.id}/esop`} className="btn btn-primary btn-sm">
+                  <Plus className="w-3.5 h-3.5" /> Manage Grants
+                </Link>
+              )}
             </div>
             <ESOPTracker grants={grants} shareholders={shareholders} />
           </div>
@@ -142,108 +153,69 @@ function AddShareholderModal({ companyId, onClose }: { companyId: string; onClos
     sharesOwned: 0, dateIssued: new Date().toISOString().split('T')[0], country: 'United States',
   })
   const { user } = useAuthStore()
+  const [busy, setBusy] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.name || form.sharesOwned <= 0) return
-    const newSH = {
-      id: 's' + Date.now(),
-      companyId,
-      name: form.name,
-      email: form.email,
-      roleType: form.roleType as any,
-      sharesOwned: Number(form.sharesOwned),
-      shareClass: form.shareClass as any,
-      dateIssued: form.dateIssued,
-      country: form.country,
-      createdAt: new Date().toISOString(),
+    if (!form.name || form.sharesOwned <= 0 || !user) return
+    setBusy(true)
+    try {
+      const res = await api.post<{ shareholder: any }>('/api/shareholders', { ...form, companyId })
+      db.shareholders.push(res.shareholder)
+      toast.success(`Shareholder "${form.name}" added`)
+      onClose()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to add')
+    } finally {
+      setBusy(false)
     }
-    db.shareholders.push(newSH)
-    db.equityTransactions.push({
-      id: 't' + Date.now(),
-      companyId,
-      toShareholderId: newSH.id,
-      transactionType: 'issuance',
-      numShares: newSH.sharesOwned,
-      transactionDate: form.dateIssued,
-      status: 'completed',
-      createdAt: new Date().toISOString(),
-    })
-    if (user) {
-      db.auditLogs.push({
-        id: 'al' + Date.now(),
-        userId: user.id,
-        action: 'shareholder.added',
-        resourceType: 'Shareholder',
-        resourceId: newSH.id,
-        newValue: { name: form.name, shares: newSH.sharesOwned },
-        timestamp: new Date().toISOString(),
-      })
-    }
-    onClose()
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-gray-900 mb-4">Add Shareholder</h2>
-        <form onSubmit={handleSubmit} className="space-y-3">
+    <ModalShell title="Add Shareholder" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <Field label="Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} required />
+        <Field label="Email *" type="email" value={form.email} onChange={v => setForm({ ...form, email: v })} required />
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">Name *</label>
-            <input className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
-          </div>
-          <div>
-            <label className="label">Email *</label>
-            <input type="email" className="input" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Role</label>
-              <select className="input" value={form.roleType} onChange={e => setForm({ ...form, roleType: e.target.value })}>
-                <option value="founder">Founder</option>
-                <option value="co_founder">Co-Founder</option>
-                <option value="angel">Angel</option>
-                <option value="vc_investor">VC Investor</option>
-                <option value="employee">Employee</option>
-                <option value="advisor">Advisor</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Class</label>
-              <select className="input" value={form.shareClass} onChange={e => setForm({ ...form, shareClass: e.target.value })}>
-                <option value="common">Common</option>
-                <option value="preferred">Preferred</option>
-                <option value="options">Options</option>
-                <option value="safe">SAFE</option>
-                <option value="warrant">Warrant</option>
-                <option value="convertible_note">Convertible Note</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Shares *</label>
-              <input type="number" min="1" className="input" value={form.sharesOwned || ''} onChange={e => setForm({ ...form, sharesOwned: Number(e.target.value) })} required />
-            </div>
-            <div>
-              <label className="label">Date Issued</label>
-              <input type="date" className="input" value={form.dateIssued} onChange={e => setForm({ ...form, dateIssued: e.target.value })} />
-            </div>
+            <label className="label">Role</label>
+            <select className="input" value={form.roleType} onChange={e => setForm({ ...form, roleType: e.target.value })}>
+              <option value="founder">Founder</option>
+              <option value="co_founder">Co-Founder</option>
+              <option value="angel">Angel</option>
+              <option value="vc_investor">VC Investor</option>
+              <option value="employee">Employee</option>
+              <option value="advisor">Advisor</option>
+            </select>
           </div>
           <div>
-            <label className="label">Country</label>
-            <input className="input" value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} />
+            <label className="label">Class</label>
+            <select className="input" value={form.shareClass} onChange={e => setForm({ ...form, shareClass: e.target.value })}>
+              <option value="common">Common</option>
+              <option value="preferred">Preferred</option>
+              <option value="options">Options</option>
+              <option value="safe">SAFE</option>
+              <option value="warrant">Warrant</option>
+              <option value="convertible_note">Convertible Note</option>
+            </select>
           </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-            <strong>Note:</strong> Ownership % is auto-calculated. You cannot enter it manually.
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose} className="btn btn-secondary flex-1 justify-center">Cancel</button>
-            <button type="submit" className="btn btn-primary flex-1 justify-center">Add Shareholder</button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Shares *" type="number" value={String(form.sharesOwned)} onChange={v => setForm({ ...form, sharesOwned: Number(v) })} required />
+          <Field label="Date Issued" type="date" value={form.dateIssued} onChange={v => setForm({ ...form, dateIssued: v })} />
+        </div>
+        <Field label="Country" value={form.country} onChange={v => setForm({ ...form, country: v })} />
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+          <strong>Note:</strong> Ownership % is auto-calculated. An immutable issuance record will be added to the equity ledger.
+        </div>
+        <div className="flex gap-2 pt-2">
+          <button type="button" onClick={onClose} className="btn btn-secondary flex-1 justify-center">Cancel</button>
+          <button type="submit" disabled={busy} className="btn btn-primary flex-1 justify-center disabled:opacity-50">
+            {busy ? 'Adding...' : 'Add Shareholder'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   )
 }
 

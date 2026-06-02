@@ -2,22 +2,50 @@
 
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { useAuthStore } from '@/lib/store/auth'
-import { Settings, Cloud, Mail, Key, Save } from 'lucide-react'
-import { useState } from 'react'
+import { Cloud, Mail, Key, Save, Edit, Check } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { toast } from '@/lib/store/toast'
+
+const STORAGE_KEY = 'equihub_settings'
+
+interface AppSettings {
+  awsRegion: string
+  s3Bucket: string
+  sesFromEmail: string
+  bedrockModelId: string
+  jwtExpiry: string
+  enableMFA: boolean
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  awsRegion: 'ap-southeast-1',
+  s3Bucket: 'equihub-documents',
+  sesFromEmail: 'noreply@equihub.com',
+  bedrockModelId: 'anthropic.claude-3-sonnet',
+  jwtExpiry: '3600',
+  enableMFA: false,
+}
 
 export default function SettingsPage() {
   const { user } = useAuthStore()
-  const [config, setConfig] = useState({
-    awsRegion: 'ap-southeast-1',
-    s3Bucket: 'equihub-documents',
-    sesFromEmail: 'noreply@equihub.com',
-    bedrockModelId: 'anthropic.claude-3-sonnet',
-    jwtExpiry: '3600',
-    enableMFA: false,
-  })
+  const [config, setConfig] = useState<AppSettings>(DEFAULT_SETTINGS)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) try { setConfig(JSON.parse(raw)) } catch {}
+  }, [])
 
   if (!user) return null
   if (user.role !== 'main_admin') return <DashboardLayout><div className="text-center py-12 text-gray-500">Main Admin access only</div></DashboardLayout>
+
+  const handleSave = () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+    setSaved(true)
+    toast.success('Settings saved', 'Configuration is now active')
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   return (
     <DashboardLayout>
@@ -50,7 +78,7 @@ export default function SettingsPage() {
               <input className="input" value={config.bedrockModelId} onChange={e => setConfig({ ...config, bedrockModelId: e.target.value })} />
             </div>
           </div>
-          <p className="text-xs text-gray-500 mt-3">All values are read from AWS Secrets Manager in production. Changes here update the local mock config.</p>
+          <p className="text-xs text-gray-500 mt-3">Production values are read from AWS Secrets Manager. Settings here are persisted to localStorage for the demo.</p>
         </div>
 
         <div className="card">
@@ -65,7 +93,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="mfa" checked={config.enableMFA} onChange={e => setConfig({ ...config, enableMFA: e.target.checked })} />
-              <label htmlFor="mfa" className="text-sm text-gray-700">Enable Multi-Factor Authentication</label>
+              <label htmlFor="mfa" className="text-sm text-gray-700">Enable Multi-Factor Authentication (requires Cognito setup)</label>
             </div>
           </div>
         </div>
@@ -79,14 +107,18 @@ export default function SettingsPage() {
             {['Document ready to sign', 'Document fully signed', 'New funding round', 'Options vested', 'Welcome email'].map(t => (
               <div key={t} className="flex items-center justify-between p-2 border border-gray-200 rounded">
                 <span className="text-sm">{t}</span>
-                <button className="text-xs text-brand hover:underline">Edit</button>
+                <button onClick={() => toast.info('Email template editor coming soon', t)} className="text-xs text-brand hover:underline inline-flex items-center gap-1">
+                  <Edit className="w-3 h-3" /> Edit
+                </button>
               </div>
             ))}
           </div>
         </div>
 
         <div className="flex justify-end">
-          <button className="btn btn-primary"><Save className="w-4 h-4" /> Save Settings</button>
+          <button onClick={handleSave} className="btn btn-primary">
+            {saved ? <><Check className="w-4 h-4" /> Saved!</> : <><Save className="w-4 h-4" /> Save Settings</>}
+          </button>
         </div>
       </div>
     </DashboardLayout>

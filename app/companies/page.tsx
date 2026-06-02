@@ -1,37 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import DashboardLayout from '@/components/layout/DashboardLayout'
 import { useAuthStore } from '@/lib/store/auth'
 import { db } from '@/lib/mock/db'
-import { Building2, Search, Plus, MapPin, Calendar, TrendingUp } from 'lucide-react'
-import Link from 'next/link'
-import { formatCurrency, formatNumber, formatDate } from '@/lib/utils'
-import { totalIssuedShares } from '@/lib/utils/calculations'
-import { ExportButton } from '@/components/shared/ExportButton'
-
-const STAGE_LABELS: Record<string, string> = {
-  pre_seed: 'Pre-Seed', seed: 'Seed', series_a: 'Series A', series_b: 'Series B', series_c: 'Series C', ipo: 'IPO',
-}
+import { api } from '@/lib/api-client'
+import { toast } from '@/lib/store/toast'
+import { Plus, Search, Edit } from 'lucide-react'
+import { ModalShell, Field } from '@/components/shared/Modal'
+import { formatCurrency } from '@/lib/utils'
+import type { FundingStage } from '@/lib/types'
 
 export default function CompaniesPage() {
   const { user } = useAuthStore()
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState('all')
+  const [showCreate, setShowCreate] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+  useEffect(() => { setTick(t => t + 1) }, [db.companies.length])
 
-  if (!user || user.role !== 'main_admin') {
-    return <DashboardLayout><div className="text-center py-12 text-gray-500">Main Admin access only</div></DashboardLayout>
-  }
+  if (!user) return null
+  if (user.role !== 'main_admin') return <DashboardLayout><div className="text-center py-12 text-gray-500">Main Admin access only</div></DashboardLayout>
 
   const filtered = db.companies.filter(c =>
     (stageFilter === 'all' || c.fundingStage === stageFilter) &&
     c.companyName.toLowerCase().includes(search.toLowerCase())
   )
-
-  const exportData = db.companies.map(c => ({
-    name: c.companyName, industry: c.industry, country: c.country,
-    stage: c.fundingStage, founded: c.foundedDate, valuation: c.currentValuation || 0,
-  }))
 
   return (
     <DashboardLayout>
@@ -39,12 +34,11 @@ export default function CompaniesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">All Companies</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage {db.companies.length} companies on the platform</p>
+            <p className="text-sm text-gray-500 mt-1">{db.companies.length} companies on the platform</p>
           </div>
-          <div className="flex gap-2">
-            <ExportButton data={exportData} filename="companies" />
-            <button className="btn btn-primary"><Plus className="w-4 h-4" /> Add Company</button>
-          </div>
+          <button onClick={() => setShowCreate(true)} className="btn btn-primary">
+            <Plus className="w-4 h-4" /> New Company
+          </button>
         </div>
 
         <div className="card">
@@ -54,44 +48,169 @@ export default function CompaniesPage() {
               <input className="input pl-10" placeholder="Search companies..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <select className="input w-auto" value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
-              <option value="all">All stages</option>
-              {Object.entries(STAGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              <option value="all">All Stages</option>
+              {['pre_seed','seed','series_a','series_b','series_c','ipo'].map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(c => {
-              const shareholders = db.shareholders.filter(s => s.companyId === c.id)
-              const total = totalIssuedShares(shareholders)
-              return (
-                <Link
-                  key={c.id}
-                  href={`/companies/${c.id}`}
-                  className="block p-5 border border-gray-200 rounded-xl hover:border-brand hover:shadow-md transition-all"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-brand-light to-gold rounded-xl flex items-center justify-center text-white font-bold text-lg">
-                      {c.companyName[0]}
-                    </div>
-                    <span className="badge badge-blue">{STAGE_LABELS[c.fundingStage]}</span>
-                  </div>
-                  <h3 className="font-semibold text-gray-900 mb-1">{c.companyName}</h3>
-                  <p className="text-xs text-gray-500 mb-3">{c.industry}</p>
-                  <div className="space-y-1.5 text-xs text-gray-600">
-                    <div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {c.country}</div>
-                    <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Founded {formatDate(c.foundedDate)}</div>
-                    <div className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> {formatCurrency(c.currentValuation || 0)}</div>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
-                    <span className="text-gray-500">{shareholders.length} shareholders</span>
-                    <span className="font-semibold text-gray-900">{formatNumber(total)} shares</span>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-          {filtered.length === 0 && <div className="text-center py-12 text-gray-500">No companies match your search</div>}
+          <table className="w-full text-sm" data-tick={tick}>
+            <thead>
+              <tr className="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                <th className="py-3">Company</th>
+                <th className="py-3">Industry</th>
+                <th className="py-3">Stage</th>
+                <th className="py-3">Shareholders</th>
+                <th className="py-3 text-right">Valuation</th>
+                <th className="py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(c => {
+                const shareholderCount = db.shareholders.filter(s => s.companyId === c.id).length
+                return (
+                  <tr key={c.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-light to-gold flex items-center justify-center text-white font-semibold text-sm">
+                          {c.companyName.split(' ').map(w => w[0]).join('').slice(0,2)}
+                        </div>
+                        <div>
+                          <a href={`/companies/${c.id}`} className="font-medium text-gray-900 hover:text-brand">{c.companyName}</a>
+                          <div className="text-xs text-gray-500">{c.country} · {new Date(c.foundedDate).getFullYear()}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 text-gray-600">{c.industry}</td>
+                    <td className="py-3"><span className="badge badge-blue">{c.fundingStage.replace('_',' ')}</span></td>
+                    <td className="py-3 text-gray-600">{shareholderCount}</td>
+                    <td className="py-3 text-right font-medium text-gray-900">{c.currentValuation ? formatCurrency(Number(c.currentValuation)) : '—'}</td>
+                    <td className="py-3 text-right">
+                      <button onClick={() => setEditing(c.id)} className="text-xs text-gray-500 hover:text-brand inline-flex items-center gap-1">
+                        <Edit className="w-3 h-3" /> Edit
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {showCreate && <CreateCompanyModal onClose={() => setShowCreate(false)} />}
+      {editing && <EditCompanyModal id={editing} onClose={() => setEditing(null)} />}
     </DashboardLayout>
+  )
+}
+
+function CreateCompanyModal({ onClose }: { onClose: () => void }) {
+  const { user } = useAuthStore()
+  const [form, setForm] = useState({
+    companyName: '',
+    country: 'United States',
+    industry: 'Technology',
+    fundingStage: 'seed' as FundingStage,
+    totalAuthorizedShares: 10_000_000,
+    currentValuation: '',
+  })
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+    setBusy(true)
+    try {
+      const res = await api.post<{ company: any }>('/api/companies', {
+        companyName: form.companyName,
+        country: form.country,
+        industry: form.industry,
+        fundingStage: form.fundingStage,
+        totalAuthorizedShares: Number(form.totalAuthorizedShares),
+        currentValuation: form.currentValuation ? Number(form.currentValuation) : undefined,
+        createdById: user.id,
+      })
+      db.companies.push(res.company)
+      toast.success(`Company "${form.companyName}" created`)
+      onClose()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to create')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ModalShell title="Create Company" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <Field label="Company Name *" value={form.companyName} onChange={v => setForm({ ...form, companyName: v })} required />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Country" value={form.country} onChange={v => setForm({ ...form, country: v })} />
+          <Field label="Industry" value={form.industry} onChange={v => setForm({ ...form, industry: v })} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Funding Stage</label>
+            <select className="input" value={form.fundingStage} onChange={e => setForm({ ...form, fundingStage: e.target.value as FundingStage })}>
+              {['pre_seed','seed','series_a','series_b','series_c','ipo'].map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
+            </select>
+          </div>
+          <Field label="Total Authorized Shares" type="number" value={String(form.totalAuthorizedShares)} onChange={v => setForm({ ...form, totalAuthorizedShares: Number(v) })} />
+        </div>
+        <Field label="Current Valuation (USD, optional)" type="number" value={form.currentValuation} onChange={v => setForm({ ...form, currentValuation: v })} />
+        <div className="flex gap-2 pt-2">
+          <button type="button" onClick={onClose} className="btn btn-secondary flex-1 justify-center">Cancel</button>
+          <button type="submit" disabled={busy} className="btn btn-primary flex-1 justify-center disabled:opacity-50">
+            {busy ? 'Creating...' : 'Create Company'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  )
+}
+
+function EditCompanyModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const company = db.companies.find(c => c.id === id)
+  const [form, setForm] = useState({
+    companyName: company?.companyName || '',
+    industry: company?.industry || '',
+    country: company?.country || '',
+    currentValuation: company?.currentValuation ? String(company.currentValuation) : '',
+  })
+  const [busy, setBusy] = useState(false)
+  if (!company) return null
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const res = await api.put<{ company: any }>(`/api/companies/${id}`, {
+        companyName: form.companyName, industry: form.industry, country: form.country,
+        currentValuation: form.currentValuation ? Number(form.currentValuation) : null,
+      })
+      const idx = db.companies.findIndex(c => c.id === id)
+      if (idx >= 0) db.companies[idx] = res.company
+      toast.success('Company updated')
+      onClose()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <ModalShell title="Edit Company" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <Field label="Company Name *" value={form.companyName} onChange={v => setForm({ ...form, companyName: v })} required />
+        <Field label="Industry" value={form.industry} onChange={v => setForm({ ...form, industry: v })} />
+        <Field label="Country" value={form.country} onChange={v => setForm({ ...form, country: v })} />
+        <Field label="Current Valuation (USD)" type="number" value={form.currentValuation} onChange={v => setForm({ ...form, currentValuation: v })} />
+        <div className="flex gap-2 pt-2">
+          <button type="button" onClick={onClose} className="btn btn-secondary flex-1 justify-center">Cancel</button>
+          <button type="submit" disabled={busy} className="btn btn-primary flex-1 justify-center disabled:opacity-50">
+            {busy ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   )
 }

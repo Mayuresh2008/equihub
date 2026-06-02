@@ -140,9 +140,15 @@ export function ShareholderTable({ shareholders, view, companyId, canEdit, onEdi
           <tbody>
             {pageItems.map((s, idx) => {
               const pct = view === 'fully_diluted' ? s.fullyDilutedPct : s.ownershipPct
-              const roleMeta = SHAREHOLDER_ROLE_META[s.roleType as ShareholderRole]
-              const classMeta = SHARE_CLASS_META[s.shareClass as ShareClass]
-              const statusMeta = SHAREHOLDER_STATUS_META[s.status as ShareholderStatus]
+              const roleMeta = SHAREHOLDER_ROLE_META[s.roleType as ShareholderRole] || {
+                label: s.roleType || 'Unknown', icon: '👤', color: '#6B7280', badge: 'badge-gray',
+              }
+              const classMeta = SHARE_CLASS_META[s.shareClass as ShareClass] || {
+                label: s.shareClass || 'Unknown', color: '#6B7280', dot: 'bg-gray-400',
+              }
+              const statusMeta = SHAREHOLDER_STATUS_META[s.status as ShareholderStatus] || {
+                label: s.status || 'unknown', badge: 'badge-gray', icon: '⚪',
+              }
               const isCancellable = s.status === 'active' && canEdit
               return (
                 <tr key={s.id} className="border-b border-gray-100 hover:bg-blue-50/30 transition-colors">

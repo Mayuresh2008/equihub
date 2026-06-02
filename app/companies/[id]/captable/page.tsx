@@ -45,15 +45,14 @@ export default function CapTablePage() {
     if (!id) return
     if (!silent) setRefreshing(true)
     try {
-      const [s, comp] = await Promise.all([
+      const [s, comp, r] = await Promise.all([
         api.get<{ shareholders: ShareholderView[]; summary: CapTableSummary }>(`/api/companies/${id}/shareholders`),
         api.get<{ companies: Company[] }>('/api/companies'),
+        api.get<{ fundingRounds: FundingRound[] }>('/api/funding-rounds'),
       ])
       setShareholders(s.shareholders)
       setSummary(s.summary)
       setCompany(comp.companies.find(c => c.id === id) || null)
-      // Rounds are needed by DilutionHistory component
-      const r = await api.get<{ fundingRounds: FundingRound[] }>('/api/funding-rounds')
       setRounds((r.fundingRounds || []).filter(fr => fr.companyId === id))
     } catch (e: any) {
       toast.error('Failed to load cap table')

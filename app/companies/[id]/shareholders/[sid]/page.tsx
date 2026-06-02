@@ -28,12 +28,14 @@ export default function ShareholderDetailPage() {
     if (!id || !sid) return
     ;(async () => {
       try {
-        const res = await api.get<{ shareholder: ShareholderView; all: ShareholderView[] }>(`/api/companies/${id}/shareholders/${sid}`)
+        const [res, companiesRes, h] = await Promise.all([
+          api.get<{ shareholder: ShareholderView; all: ShareholderView[] }>(`/api/companies/${id}/shareholders/${sid}`),
+          api.get<{ companies: Company[] }>('/api/companies'),
+          api.get<{ history: DilutionEvent[] }>(`/api/companies/${id}/dilution-history`),
+        ])
         setShareholder(res.shareholder)
         setAllShareholders(res.all)
-        const companies = (await api.get<{ companies: Company[] }>('/api/companies')).companies
-        setCompany(companies.find(c => c.id === id) || null)
-        const h = await api.get<{ history: DilutionEvent[] }>(`/api/companies/${id}/dilution-history`)
+        setCompany(companiesRes.companies.find(c => c.id === id) || null)
         setHistory(h.history)
       } catch (e) {
         // fallback
@@ -47,9 +49,9 @@ export default function ShareholderDetailPage() {
   if (loading) return <DashboardLayout><div className="text-center py-12 text-gray-500">Loading…</div></DashboardLayout>
   if (!shareholder || !company) return <DashboardLayout><div className="text-center py-12 text-gray-500">Shareholder not found</div></DashboardLayout>
 
-  const roleMeta = SHAREHOLDER_ROLE_META[shareholder.roleType]
-  const classMeta = SHARE_CLASS_META[shareholder.shareClass]
-  const statusMeta = SHAREHOLDER_STATUS_META[shareholder.status]
+  const roleMeta = SHAREHOLDER_ROLE_META[shareholder.roleType] || { label: shareholder.roleType || 'Unknown', icon: '👤', color: '#6B7280', badge: 'badge-gray' }
+  const classMeta = SHARE_CLASS_META[shareholder.shareClass] || { label: shareholder.shareClass || 'Unknown', color: '#6B7280', dot: 'bg-gray-400' }
+  const statusMeta = SHAREHOLDER_STATUS_META[shareholder.status] || { label: shareholder.status || 'unknown', badge: 'badge-gray', icon: '⚪' }
   const holdingsEvents = history.filter(e => e.changes.some(c => c.shareholderId === sid))
 
   return (

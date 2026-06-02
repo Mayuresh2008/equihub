@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { ArrowUp, ArrowDown, MoreVertical, Eye, Edit, FileText, Award, ArrowRightLeft, X, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowUp, ArrowDown, MoreVertical, Eye, Edit, FileText, Award, ArrowRightLeft, X, Search, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import type { ShareholderView, ShareholderRole, ShareClass, ShareholderStatus } from '@/lib/types'
 import { SHAREHOLDER_ROLE_META, SHARE_CLASS_META, SHAREHOLDER_STATUS_META } from '@/lib/types'
 import { Avatar } from '@/components/shared/Modal'
@@ -21,9 +21,10 @@ interface Props {
   onTransfer: (s: ShareholderView) => void
   onCancel: (s: ShareholderView) => void
   onIssueCertificate: (s: ShareholderView) => void
+  onAdd?: () => void
 }
 
-export function ShareholderTable({ shareholders, view, companyId, canEdit, onEdit, onTransfer, onCancel, onIssueCertificate }: Props) {
+export function ShareholderTable({ shareholders, view, companyId, canEdit, onEdit, onTransfer, onCancel, onIssueCertificate, onAdd }: Props) {
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState<string>('all')
   const [filterClass, setFilterClass] = useState<string>('all')
@@ -82,9 +83,18 @@ export function ShareholderTable({ shareholders, view, companyId, canEdit, onEdi
   if (shareholders.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center text-2xl">👥</div>
-        <h3 className="text-base font-semibold text-gray-900 mb-1">No shareholders yet</h3>
-        <p className="text-sm text-gray-500">Add your first shareholder to get started.</p>
+        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-3xl">👥</div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">No shareholders yet</h3>
+        <p className="text-sm text-gray-500 mb-4">Add your first shareholder to get started.</p>
+        {canEdit && onAdd && (
+          <button
+            onClick={onAdd}
+            className="btn btn-primary mx-auto"
+            data-testid="empty-state-add-btn"
+          >
+            <Plus className="w-4 h-4" /> Add First Shareholder
+          </button>
+        )}
       </div>
     )
   }

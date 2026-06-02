@@ -75,7 +75,7 @@ export default function CapTablePage() {
     return <DashboardLayout><div className="text-center py-12 text-gray-500">Access denied</div></DashboardLayout>
   }
 
-  const canEdit = user.role === 'startup_admin' && user.companyId === company.id
+  const canEdit = (user.role === 'startup_admin' && user.companyId === company.id) || user.role === 'main_admin'
   const total = totalIssuedShares(shareholders as any)
 
   const handleCancel = async (s: ShareholderView) => {
@@ -186,6 +186,7 @@ export default function CapTablePage() {
                 onTransfer={s => setTransferShareholder(s)}
                 onCancel={handleCancel}
                 onIssueCertificate={handleIssueCertificate}
+                onAdd={() => setShowAdd(true)}
               />
             </div>
             <div className="card">
